@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>컬러·패턴 라벨링</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f0f0; color: #333;
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .header {
+      background: #fff; border-bottom: 1px solid #e0e0e0;
+      padding: 10px 20px; display: flex; align-items: center; gap: 16px; flex-shrink: 0;
+    }
+    .header h1 { font-size: 15px; font-weight: 700; white-space: nowrap; }
+    .progress-wrap { flex: 1; display: flex; align-items: center; gap: 10px; }
+    .progress-bar { flex: 1; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #4caf50; border-radius: 3px; transition: width 0.4s; width: 0%; }
+    .progress-text { font-size: 12px; color: #888; white-space: nowrap; }
+    .kbd-legend { font-size: 11px; color: #bbb; white-space: nowrap; }
+    .main { flex: 1; display: flex; overflow: hidden; }
+    .photo-panel {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 16px; gap: 12px; background: #e8e8e8; overflow: hidden;
+    }
+    .photo-wrap { display: flex; align-items: center; justify-content: center; max-width: 100%; max-height: calc(100vh - 160px); }
+    .photo-wrap img {
+      max-width: 100%; max-height: calc(100vh - 160px);
+      object-fit: contain; border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2); background: #fff;
+    }
+    .item-info { text-align: center; }
+    .item-barcode { font-size: 16px; font-weight: 700; }
+    .item-meta { font-size: 13px; color: #777; margin-top: 3px; }
+    .controls {
+      width: 300px; flex-shrink: 0; background: #fff;
+      border-left: 1px solid #e0e0e0; display: flex; flex-direction: column;
+      padding: 14px; gap: 14px; overflow-y: auto;
+    }
+    .section-title { font-size: 11px; font-weight: 700; color: #aaa; letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 6px; }
+    .color-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+    .color-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      padding: 7px 3px; border: 2px solid transparent; border-radius: 8px;
+      background: #f5f5f5; cursor: pointer; transition: border-color 0.12s, background 0.12s;
+    }
+    .color-btn:hover { background: #ebebeb; }
+    .color-btn.selected { border-color: #1976d2; background: #e3f2fd; }
+    .color-swatch { width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.12); flex-shrink: 0; }
+    .color-btn span { font-size: 10px; color: #555; line-height: 1; }
+    .color-btn.selected span { color: #1976d2; font-weight: 600; }
+    .pattern-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+    .pattern-btn {
+      padding: 9px 4px; border: 2px solid transparent; border-radius: 8px;
+      background: #f5f5f5; cursor: pointer; font-size: 12px; text-align: center;
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .pattern-btn:hover { background: #ebebeb; }
+    .pattern-btn.selected { border-color: #1976d2; background: #e3f2fd; color: #1976d2; font-weight: 700; }
+    .actions { margin-top: auto; display: flex; flex-direction: column; gap: 7px; }
+    .btn-save {
+      padding: 13px; background: #1976d2; color: #fff; border: none;
+      border-radius: 9px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.12s;
+    }
+    .btn-save:hover:not(:disabled) { background: #1565c0; }
+    .btn-save:disabled { background: #bdbdbd; cursor: not-allowed; }
+    .btn-skip {
+      padding: 10px; background: #f5f5f5; color: #888;
+      border: 1px solid #e0e0e0; border-radius: 9px; font-size: 13px; cursor: pointer;
+    }
+    .btn-skip:hover { background: #ebebeb; }
+    .hint { font-size: 11px; color: #ccc; text-align: center; }
+    .overlay {
+      position: fixed; inset: 0; background: rgba(255,255,255,0.92);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; z-index: 50;
+    }
+    .overlay.hidden { display: none; }
+    .spinner {
+      width: 36px; height: 36px; border: 3px solid #e0e0e0;
+      border-top-color: #1976d2; border-radius: 50%; animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .overlay-msg { font-size: 16px; color: #555; }
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: #323232; color: #fff; padding: 9px 20px; border-radius: 6px;
+      font-size: 13px; opacity: 0; transition: opacity 0.25s; pointer-events: none; z-index: 60;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>컬러·패턴 라벨링</h1>
+  <div class="progress-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <span class="progress-text" id="progressText">불러오는 중...</span>
+  </div>
+  <span class="kbd-legend">컬러 1–9·Q·W·E·R·T &nbsp;|&nbsp; 패턴 A·S·D·F·G·H·J·K·L &nbsp;|&nbsp; 저장 Enter &nbsp;|&nbsp; 건너뛰기 Space</span>
+</div>
+
+<div class="main">
+  <div class="photo-panel">
+    <div class="photo-wrap">
+      <img id="itemPhoto" src="" alt="사진 없음" />
+    </div>
+    <div class="item-info">
+      <div class="item-barcode" id="itemBarcode"></div>
+      <div class="item-meta" id="itemMeta"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div>
+      <div class="section-title">컬러</div>
+      <div class="color-grid" id="colorGrid"></div>
+    </div>
+    <div>
+      <div class="section-title">패턴</div>
+      <div class="pattern-grid" id="patternGrid"></div>
+    </div>
+    <div class="actions">
+      <button class="btn-save" id="btnSave" disabled>저장 (Enter)</button>
+      <button class="btn-skip" id="btnSkip">건너뛰기 (Space)</button>
+      <div class="hint">컬러와 패턴을 모두 선택해야 저장됩니다</div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="spinner" id="overlaySpinner"></div>
+  <div class="overlay-msg" id="overlayMsg">불러오는 중...</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://yqnocnzjrcsrwrvsvsyg.supabase.co';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxbm9jbnpqcmNzcndydnN2c3lnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNjExNzgsImV4cCI6MjA5MTgzNzE3OH0.u172XxuUcRF7WhT0UmLq-xQjoeDjBt95Qgbstln8mMs';
+
+const COLORS = [
+  { name: '블랙',   hex: '#111111' },
+  { name: '화이트', hex: '#f2f2f2', border: true },
+  { name: '그레이', hex: '#9e9e9e' },
+  { name: '네이비', hex: '#0d2b6e' },
+  { name: '블루',   hex: '#1e88e5' },
+  { name: '레드',   hex: '#e53935' },
+  { name: '핑크',   hex: '#f06292' },
+  { name: '옐로우', hex: '#fdd835', border: true },
+  { name: '그린',   hex: '#43a047' },
+  { name: '브라운', hex: '#795548' },
+  { name: '퍼플',   hex: '#8e24aa' },
+  { name: '오렌지', hex: '#fb8c00' },
+  { name: '멀티',   gradient: 'linear-gradient(135deg,#e53935 0%,#fdd835 33%,#43a047 66%,#1e88e5 100%)' },
+  { name: '베이지', hex: '#d2b48c' },
+];
+const COLOR_KEYS   = ['1','2','3','4','5','6','7','8','9','q','w','e','r','t'];
+const PATTERNS     = ['무지','데님','스트라이프','체크','도트','플로럴','카모','그래픽·프린트','기타'];
+const PATTERN_KEYS = ['a','s','d','f','g','h','j','k','l'];
+const EXCLUDED     = '가방,신발,모자,벨트,악세서리,잡화,캡,cap,hat';
+
+let queue = [], idx = 0, totalNull = 0, sessionDone = 0;
+let selColor = null, selPattern = null, saving = false;
+
+/* Build color buttons */
+const colorGrid = document.getElementById('colorGrid');
+COLORS.forEach((c, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'color-btn';
+  btn.title = COLOR_KEYS[i].toUpperCase() + ' — ' + c.name;
+  const sw = document.createElement('div');
+  sw.className = 'color-swatch';
+  sw.style.background = c.gradient || c.hex;
+  if (c.border || c.gradient) sw.style.border = '1px solid #ccc';
+  const lbl = document.createElement('span');
+  lbl.textContent = c.name;
+  btn.appendChild(sw); btn.appendChild(lbl);
+  btn.addEventListener('click', () => pickColor(c.name, btn));
+  colorGrid.appendChild(btn);
+});
+
+/* Build pattern buttons */
+const patternGrid = document.getElementById('patternGrid');
+PATTERNS.forEach((p, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'pattern-btn';
+  btn.textContent = p;
+  btn.title = PATTERN_KEYS[i].toUpperCase() + ' — ' + p;
+  btn.addEventListener('click', () => pickPattern(p, btn));
+  patternGrid.appendChild(btn);
+});
+
+function pickColor(name, el) {
+  selColor = name;
+  document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  updateSaveBtn();
+}
+function pickPattern(name, el) {
+  selPattern = name;
+  document.querySelectorAll('.pattern-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  updateSaveBtn();
+}
+function updateSaveBtn() {
+  document.getElementById('btnSave').disabled = !(selColor && selPattern) || saving;
+}
+
+function showOverlay(msg, spinner = true) {
+  document.getElementById('overlay').classList.remove('hidden');
+  document.getElementById('overlayMsg').textContent = msg;
+  document.getElementById('overlaySpinner').style.display = spinner ? '' : 'none';
+}
+function hideOverlay() { document.getElementById('overlay').classList.add('hidden'); }
+
+let toastTimer = null;
+function toast(msg, ms = 1400) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function updateProgress() {
+  const remaining = Math.max(0, totalNull - sessionDone);
+  const done = sessionDone;
+  const total = done + (queue.length - idx);
+  const pct = total > 0 ? Math.min((done / total) * 100, 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent =
+    '잔여 약 ' + remaining.toLocaleString() + '건 | 세션 ' + done + '건 완료';
+}
+
+async function sbFetch(path, opts) {
+  opts = opts || {};
+  const headers = Object.assign({ apikey: ANON_KEY, Authorization: 'Bearer ' + ANON_KEY }, opts.headers || {});
+  return fetch(SUPABASE_URL + '/rest/v1/' + path, Object.assign({}, opts, { headers }));
+}
+
+async function fetchBatch() {
+  showOverlay('아이템 불러오는 중...');
+  const base = 'inventory_items?select=id,photo_url,category,location,barcode'
+    + '&color=is.null&photo_url=not.is.null&status=eq.in_stock'
+    + '&category=not.in.(' + encodeURIComponent(EXCLUDED) + ')';
+
+  const cr = await sbFetch(base + '&limit=1', { headers: { Prefer: 'count=exact' } });
+  const range = cr.headers.get('content-range') || '0-0/0';
+  totalNull = parseInt(range.split('/')[1]) || 0;
+
+  if (totalNull === 0) { showOverlay('🎉 남은 아이템이 없습니다!', false); return; }
+
+  const maxOff = Math.max(0, totalNull - 50);
+  const offset = Math.floor(Math.random() * maxOff);
+  const resp = await sbFetch(base + '&order=id&limit=50&offset=' + offset);
+  queue = await resp.json();
+  idx = 0;
+  hideOverlay();
+}
+
+function showItem() {
+  if (idx >= queue.length) {
+    if (totalNull - sessionDone > 0) { fetchBatch().then(showItem); }
+    else { showOverlay('🎉 모든 아이템 완료!', false); }
+    return;
+  }
+  const item = queue[idx];
+  document.getElementById('itemPhoto').src = item.photo_url || '';
+  document.getElementById('itemBarcode').textContent = item.barcode || item.id.slice(0, 8);
+  document.getElementById('itemMeta').textContent =
+    [item.category, item.location].filter(Boolean).join(' · ');
+  selColor = null; selPattern = null;
+  document.querySelectorAll('.color-btn, .pattern-btn').forEach(b => b.classList.remove('selected'));
+  updateSaveBtn();
+  updateProgress();
+}
+
+async function saveItem() {
+  if (!selColor || !selPattern || saving) return;
+  saving = true; updateSaveBtn();
+  const item = queue[idx];
+  try {
+    const resp = await sbFetch(
+      'inventory_items?id=eq.' + item.id + '&color=is.null',
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ color: selColor, pattern: selPattern }),
+      }
+    );
+    if (resp.ok) {
+      sessionDone++;
+      toast('✓ ' + (item.barcode || item.id.slice(0,8)) + ' — ' + selColor + ' / ' + selPattern);
+    } else {
+      toast('저장 실패 (' + resp.status + ')', 2500);
+    }
+  } catch(e) {
+    toast('네트워크 오류: ' + e.message, 3000);
+  }
+  saving = false; idx++; showItem();
+}
+
+function skipItem() { toast('건너뜀'); idx++; showItem(); }
+
+document.getElementById('btnSave').addEventListener('click', saveItem);
+document.getElementById('btnSkip').addEventListener('click', skipItem);
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); saveItem(); return; }
+  if (e.key === ' ')     { e.preventDefault(); skipItem(); return; }
+  const ci = COLOR_KEYS.indexOf(e.key.toLowerCase());
+  if (ci >= 0) { pickColor(COLORS[ci].name, colorGrid.querySelectorAll('.color-btn')[ci]); return; }
+  const pi = PATTERN_KEYS.indexOf(e.key.toLowerCase());
+  if (pi >= 0) { pickPattern(PATTERNS[pi], patternGrid.querySelectorAll('.pattern-btn')[pi]); }
+});
+
+fetchBatch().then(showItem);
+</script>
+</body>
+</html>
