@@ -127,7 +127,7 @@
     <div class="actions">
       <button class="btn-save" id="btnSave" disabled>저장 (Enter)</button>
       <button class="btn-skip" id="btnSkip">건너뛰기 (Space)</button>
-      <div class="hint">컬러와 패턴을 모두 선택해야 저장됩니다</div>
+      <div class="hint" id="hint">컬러와 패턴을 모두 선택해야 저장됩니다</div>
     </div>
   </div>
 </div>
@@ -155,13 +155,18 @@ const COLORS = [
   { name: '브라운', hex: '#795548' },
   { name: '퍼플',   hex: '#8e24aa' },
   { name: '오렌지', hex: '#fb8c00' },
-  { name: '멀티',   gradient: 'linear-gradient(135deg,#e53935 0%,#fdd835 33%,#43a047 66%,#1e88e5 100%)' },
+  { name: '멀티·기타', gradient: 'linear-gradient(135deg,#e53935 0%,#fdd835 33%,#43a047 66%,#1e88e5 100%)' },
   { name: '베이지', hex: '#d2b48c' },
 ];
 const COLOR_KEYS   = ['1','2','3','4','5','6','7','8','9','q','w','e','r','t'];
 const PATTERNS     = ['무지','데님','스트라이프','체크','도트','플로럴','카모','그래픽·프린트','기타'];
 const PATTERN_KEYS = ['a','s','d','f','g','h','j','k','l'];
-const EXCLUDED     = '가방,신발,모자,벨트,악세서리,잡화,캡,cap,hat';
+const ACCESSORY   = new Set(['가방','신발','모자','벨트','악세서리','잡화','캡','cap','hat','etc','패브릭','페브릭','넥타이']);
+function isAccessory(item) {
+  let c = ((item && item.category) || '').trim().toLowerCase();
+  if (c.startsWith('온') && ACCESSORY.has(c.slice(1))) c = c.slice(1);
+  return ACCESSORY.has(c);
+}
 
 let queue = [], idx = 0, totalNull = 0, sessionDone = 0;
 let selColor = null, selPattern = null, saving = false;
@@ -207,7 +212,9 @@ function pickPattern(name, el) {
   updateSaveBtn();
 }
 function updateSaveBtn() {
-  document.getElementById('btnSave').disabled = !(selColor && selPattern) || saving;
+  const item = queue[idx];
+  const patternOk = selPattern || (item && isAccessory(item));
+  document.getElementById('btnSave').disabled = !(selColor && patternOk) || saving;
 }
 
 function showOverlay(msg, spinner = true) {
@@ -245,8 +252,7 @@ async function sbFetch(path, opts) {
 async function fetchBatch() {
   showOverlay('아이템 불러오는 중...');
   const base = 'inventory_items?select=id,photo_url,category,location,barcode'
-    + '&color=is.null&photo_url=not.is.null&status=eq.in_stock'
-    + '&category=not.in.(' + encodeURIComponent(EXCLUDED) + ')';
+    + '&color=is.null&photo_url=not.is.null&status=eq.in_stock';
 
   const cr = await sbFetch(base + '&limit=1', { headers: { Prefer: 'count=exact' } });
   const range = cr.headers.get('content-range') || '0-0/0';
@@ -275,21 +281,24 @@ function showItem() {
     [item.category, item.location].filter(Boolean).join(' · ');
   selColor = null; selPattern = null;
   document.querySelectorAll('.color-btn, .pattern-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('hint').textContent = isAccessory(item)
+    ? '잡화: 컬러만 선택해도 저장됩니다 (패턴은 선택 시에만 저장)'
+    : '컬러와 패턴을 모두 선택해야 저장됩니다';
   updateSaveBtn();
   updateProgress();
 }
 
 async function saveItem() {
-  if (!selColor || !selPattern || saving) return;
-  saving = true; updateSaveBtn();
   const item = queue[idx];
+  if (!selColor || (!selPattern && !isAccessory(item)) || saving) return;
+  saving = true; updateSaveBtn();
   try {
     const resp = await sbFetch(
       'inventory_items?id=eq.' + item.id + '&color=is.null',
       {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({ color: selColor, pattern: selPattern }),
+        body: JSON.stringify(selPattern ? { color: selColor, pattern: selPattern } : { color: selColor }),
       }
     );
     if (resp.ok) {
